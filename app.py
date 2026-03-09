@@ -37,6 +37,9 @@ json_file = st.sidebar.file_uploader("📊 Upload Questions JSON", type=["json"]
 # 3. Timer Setting
 timer_minutes = st.sidebar.number_input("⏱️ Exam Duration (minutes)", min_value=1, max_value=180, value=60, step=5)
 
+# 4. Zoom control para sa PDF (lalabas lang kung may PDF)
+zoom_level = st.sidebar.slider("🔍 Zoom PDF", min_value=0.5, max_value=3.0, value=1.5, step=0.1)
+
 # Load questions from JSON
 if json_file and st.session_state.questions is None:
     try:
@@ -54,7 +57,7 @@ if pdf_file:
     with col1:
         st.subheader("📄 Exam Paper")
         
-        # Convert PDF to images
+        # Convert PDF to images with zoom control
         try:
             pdf_bytes = pdf_file.getvalue()
             pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -62,9 +65,12 @@ if pdf_file:
             # Display each page as an image
             for page_num in range(len(pdf_document)):
                 page = pdf_document.load_page(page_num)
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # Increase resolution
+                # Use zoom level for higher resolution
+                matrix = fitz.Matrix(zoom_level, zoom_level)
+                pix = page.get_pixmap(matrix=matrix)
                 img_data = pix.tobytes("png")
                 img = Image.open(BytesIO(img_data))
+                # use_container_width=True ensures image fits column width
                 st.image(img, caption=f"Page {page_num + 1}", use_container_width=True)
             
             pdf_document.close()
