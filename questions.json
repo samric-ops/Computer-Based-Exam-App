@@ -1,16 +1,22 @@
 [
-  {
-    "question_text": "Solve for x in the following equation:",
-    "math_formula": "\\frac{2x}{3} + 5^2 = 31",
-    "type": "multiple_choice",
-    "options": ["9", "12", "6", "15"],
-    "correct_answer": "9"
-  },
-  {
-    "question_text": "Simplify the expression below:",
-    "math_formula": "\\sqrt{x^2 + y^2}",
-    "type": "multiple_choice",
-    "options": ["Pythagorean", "Linear", "Quadratic", "None"],
-    "correct_answer": "Pythagorean"
-  }
+    {
+        "question": "Ano ang 2 + 2?",
+        "type": "number",
+        "correct": 4
+    },
+    {
+        "question": "Sino ang pambansang bayani ng Pilipinas?",
+        "options": ["Jose Rizal", "Andres Bonifacio", "Emilio Aguinaldo"],
+        "correct": "Jose Rizal"
+    },
+    {
+        "question": "Ano ang chemical symbol ng tubig?",
+        "type": "text",
+        "correct": "H2O"
+    },
+    {
+        "question": "Solve for x: 3x = 15",
+        "type": "number",
+        "correct": 5
+    }
 ]
