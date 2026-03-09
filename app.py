@@ -5,8 +5,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import time
 import fitz  # PyMuPDF
+from io import BytesIO
 from PIL import Image
-import io
 
 # ---------------------------- PAGE CONFIG ----------------------------
 st.set_page_config(page_title="Computer-Based Exam", layout="wide")
@@ -48,38 +48,30 @@ if json_file and st.session_state.questions is None:
 # ---------------------------- MAIN UI ---------------------------------
 st.title("📝 Computer-Based Exam with Automatic Scoring")
 
-# Display PDF if uploaded - Using PyMuPDF to render as images
+# Display PDF as images if uploaded
 if pdf_file:
     col1, col2 = st.columns([1.2, 1])
     with col1:
         st.subheader("📄 Exam Paper")
         
-        # Read PDF bytes
-        pdf_bytes = pdf_file.getvalue()
-        
-        # Open PDF with fitz
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        
-        # Loop through pages and display as images
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # Increase resolution
-            img_data = pix.tobytes("png")
+        # Convert PDF to images
+        try:
+            pdf_bytes = pdf_file.getvalue()
+            pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
             
-            # Convert to PIL Image and display
-            image = Image.open(io.BytesIO(img_data))
-            st.image(image, caption=f"Page {page_num+1}", use_container_width=True)
-        
-        doc.close()
-        
-        # Option to download original PDF as backup (optional)
-        with st.expander("📥 I-download ang original PDF"):
-            st.download_button(
-                "I-download PDF",
-                data=pdf_bytes,
-                file_name="exam.pdf",
-                mime="application/pdf"
-            )
+            # Display each page as an image
+            for page_num in range(len(pdf_document)):
+                page = pdf_document.load_page(page_num)
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # Increase resolution
+                img_data = pix.tobytes("png")
+                img = Image.open(BytesIO(img_data))
+                st.image(img, caption=f"Page {page_num + 1}", use_container_width=True)
+            
+            pdf_document.close()
+        except Exception as e:
+            st.error(f"❌ Hindi mabuksan ang PDF: {e}")
+            st.info("Subukan mong i-download ang PDF sa ibaba.")
+            st.download_button("📥 I-download ang PDF", data=pdf_bytes, file_name="exam.pdf")
         
     answer_col = col2
 else:
