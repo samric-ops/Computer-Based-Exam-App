@@ -1,26 +1,16 @@
 [
   {
-    "id": 1,
-    "question": "Solve for x in the following equation:",
-    "math_content": "\\frac{3x}{5} + 2^3 = 14",
+    "question_text": "Solve for x in the following equation:",
+    "math_formula": "\\frac{2x}{3} + 5^2 = 31",
     "type": "multiple_choice",
-    "options": ["10", "15", "8", "12"],
-    "answer": "10"
+    "options": ["9", "12", "6", "15"],
+    "correct_answer": "9"
   },
   {
-    "id": 2,
-    "question": "Simplify the expression using exponent rules:",
-    "math_content": "\\sqrt{x^4 \\cdot y^6}",
+    "question_text": "Simplify the expression below:",
+    "math_formula": "\\sqrt{x^2 + y^2}",
     "type": "multiple_choice",
-    "options": ["x^2 y^3", "x^8 y^{12}", "x^2 y^2", "xy"],
-    "answer": "x^2 y^3"
-  },
-  {
-    "id": 3,
-    "question": "What is the value of the following fraction?",
-    "math_content": "\\frac{7}{8} - \\frac{1}{4}",
-    "type": "multiple_choice",
-    "options": ["5/8", "3/4", "6/8", "1/2"],
-    "answer": "5/8"
+    "options": ["Pythagorean", "Linear", "Quadratic", "None"],
+    "correct_answer": "Pythagorean"
   }
 ]
