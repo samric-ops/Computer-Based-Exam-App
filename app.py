@@ -1,72 +1,64 @@
 import streamlit as st
 import json
 
-# Set up the professional page look
-st.set_page_config(page_title="Professional Math Exam", page_icon="📝", layout="centered")
+# 1. Page Configuration
+st.set_page_config(page_title="Digital Exam System", layout="wide")
 
-# Custom Styling
-st.markdown("""
-    <style>
-    .stRadio > label { font-size: 18px; font-weight: bold; }
-    .main { background-color: #fafafa; }
-    </style>
-    """, unsafe_allow_html=True)
+# 2. Sidebar - Teacher/Admin Controls
+st.sidebar.title("🛠️ Teacher Dashboard")
+st.sidebar.info("Upload your 'questions.json' file here to generate the exam for your students.")
 
-def load_exam_data():
+uploaded_file = st.sidebar.file_uploader("Upload Exam File (JSON)", type=["json"])
+
+# 3. Session State to store the exam
+if uploaded_file is not None:
     try:
-        with open('questions.json', 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        st.error("❌ 'questions.json' not found. Please upload it to your GitHub repo.")
-        return None
-    except json.JSONDecodeError as e:
-        st.error(f"❌ Syntax Error in questions.json: {e}")
-        st.info("Ensure you used double backslashes (\\\\) for math and closed all commas.")
-        return None
+        st.session_state.exam_data = json.load(uploaded_file)
+        st.sidebar.success("✅ Exam Uploaded Successfully!")
+    except Exception as e:
+        st.sidebar.error(f"❌ Error: {e}")
 
-def main():
-    st.title("📐 Modern Mathematics Exam")
-    st.write("Complete the exam below. Math formulas are displayed in professional LaTeX format.")
-    st.divider()
+# 4. Main App Logic
+st.title("📝 Student Exam Portal")
 
-    questions = load_exam_data()
+if 'exam_data' not in st.session_state:
+    st.warning("👋 Welcome! Please wait for your teacher to upload the exam file in the dashboard.")
+else:
+    st.info("💡 Instructions: Read the questions carefully. Math symbols are displayed professionally.")
     
-    if questions:
-        responses = {}
+    questions = st.session_state.exam_data
+    responses = {}
+
+    # The Exam Form
+    with st.form("student_exam"):
+        for i, q in enumerate(questions):
+            st.markdown(f"### Question {i+1}")
+            st.write(q['question_text'])
+            
+            # This renders the "Professional" Math (Fractions/Exponents)
+            if "math_formula" in q and q['math_formula']:
+                st.latex(q['math_formula'])
+            
+            # Answer input
+            if q['type'] == "multiple_choice":
+                responses[i] = st.radio("Choose the best answer:", q['options'], key=f"q_{i}")
+            else:
+                responses[i] = st.text_input("Type your answer here:", key=f"q_{i}")
+            
+            st.divider()
+
+        # Submit
+        submitted = st.form_submit_button("Submit Final Answers")
+
+    if submitted:
+        score = 0
+        total = len(questions)
         
-        with st.form("exam_submission"):
-            for q in questions:
-                st.subheader(f"Question {q['id']}")
-                st.write(q['question'])
-                
-                # Render Professional Math
-                if q['math_content']:
-                    st.latex(q['math_content'])
-                
-                # Input type
-                if q['type'] == "multiple_choice":
-                    responses[q['id']] = st.radio("Choose the correct answer:", q['options'], key=f"q_{q['id']}")
-                else:
-                    responses[q['id']] = st.text_input("Type your answer:", key=f"q_{q['id']}")
-                
-                st.divider()
-
-            # Submit button
-            submitted = st.form_submit_button("Submit My Answers")
-
-        if submitted:
-            score = 0
-            for q in questions:
-                if responses[q['id']] == q['answer']:
-                    score += 1
-            
-            st.balloons()
-            st.success(f"### Submission Successful!")
-            st.metric(label="Final Score", value=f"{score} / {len(questions)}")
-            
-            if score == len(questions):
-                st.confetti() # Only if using extra components, otherwise just balloons is fine
-                st.write("Excellent! Perfect score! 🌟")
-
-if __name__ == "__main__":
-    main()
+        for i, q in enumerate(questions):
+            if responses[i] == q['correct_answer']:
+                score += 1
+        
+        st.balloons()
+        st.success(f"### Exam Submitted!")
+        st.metric(label="Your Final Score", value=f"{score} / {total}")
+        st.write("Results have been recorded. You may now close this tab.")
