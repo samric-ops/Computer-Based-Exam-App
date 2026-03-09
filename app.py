@@ -1,7 +1,7 @@
 import streamlit as st
 import base64
 import json
-import pandas as pd
+ import pandas as pd
 from datetime import datetime, timedelta
 import time
 import fitz  # PyMuPDF
@@ -37,8 +37,13 @@ json_file = st.sidebar.file_uploader("📊 Upload Questions JSON", type=["json"]
 # 3. Timer Setting
 timer_minutes = st.sidebar.number_input("⏱️ Exam Duration (minutes)", min_value=1, max_value=180, value=60, step=5)
 
-# 4. Zoom control para sa PDF (lalabas lang kung may PDF)
-zoom_level = st.sidebar.slider("🔍 Zoom PDF", min_value=0.5, max_value=3.0, value=1.5, step=0.1)
+# 4. PDF Quality Settings (lalabas lang kung may PDF)
+if pdf_file:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📐 PDF Display Settings")
+    zoom_level = st.sidebar.slider("🔍 Zoom Level", min_value=1.0, max_value=4.0, value=2.5, step=0.5, 
+                                   help="Mas mataas na zoom = mas malaki at malinaw na text")
+    page_spacing = st.sidebar.checkbox("Add spacing between pages", value=True)
 
 # Load questions from JSON
 if json_file and st.session_state.questions is None:
@@ -53,27 +58,43 @@ st.title("📝 Computer-Based Exam with Automatic Scoring")
 
 # Display PDF as images if uploaded
 if pdf_file:
-    col1, col2 = st.columns([1.2, 1])
+    col1, col2 = st.columns([1.3, 1])  # Mas malawak na space para sa PDF
+    
     with col1:
         st.subheader("📄 Exam Paper")
         
-        # Convert PDF to images with zoom control
+        # Convert PDF to high-resolution images
         try:
             pdf_bytes = pdf_file.getvalue()
             pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
             
-            # Display each page as an image
+            # Get zoom level from session state (default 2.5 if not set)
+            current_zoom = zoom_level if 'zoom_level' in locals() else 2.5
+            
+            # Display each page with high quality
             for page_num in range(len(pdf_document)):
                 page = pdf_document.load_page(page_num)
-                # Use zoom level for higher resolution
-                matrix = fitz.Matrix(zoom_level, zoom_level)
-                pix = page.get_pixmap(matrix=matrix)
+                
+                # Use higher resolution for better text clarity
+                matrix = fitz.Matrix(current_zoom, current_zoom)
+                pix = page.get_pixmap(matrix=matrix, alpha=False)
+                
+                # Convert to PIL Image
                 img_data = pix.tobytes("png")
                 img = Image.open(BytesIO(img_data))
-                # use_container_width=True ensures image fits column width
-                st.image(img, caption=f"Page {page_num + 1}", use_container_width=True)
+                
+                # Display image with proper width
+                st.image(img, caption=f"Page {page_num + 1}", use_column_width=True)
+                
+                # Add optional spacing
+                if page_spacing and page_num < len(pdf_document) - 1:
+                    st.markdown("---")
             
             pdf_document.close()
+            
+            # Display page count
+            st.caption(f"Total pages: {len(pdf_document)}")
+            
         except Exception as e:
             st.error(f"❌ Hindi mabuksan ang PDF: {e}")
             st.info("Subukan mong i-download ang PDF sa ibaba.")
