@@ -1,64 +1,30 @@
 import streamlit as st
-import json
+import base64
 
-# 1. Page Configuration
-st.set_page_config(page_title="Digital Exam System", layout="wide")
+st.set_page_config(page_title="Math Exam Portal", layout="wide")
 
-# 2. Sidebar - Teacher/Admin Controls
-st.sidebar.title("🛠️ Teacher Dashboard")
-st.sidebar.info("Upload your 'questions.json' file here to generate the exam for your students.")
+st.title("📝 Professional Exam Portal")
+st.sidebar.header("Teacher Dashboard")
 
-uploaded_file = st.sidebar.file_uploader("Upload Exam File (JSON)", type=["json"])
+# Dito mo i-uupload ang PDF version ng exam mo
+uploaded_file = st.sidebar.file_uploader("Upload your Exam (PDF only)", type=["pdf"])
 
-# 3. Session State to store the exam
 if uploaded_file is not None:
-    try:
-        st.session_state.exam_data = json.load(uploaded_file)
-        st.sidebar.success("✅ Exam Uploaded Successfully!")
-    except Exception as e:
-        st.sidebar.error(f"❌ Error: {e}")
-
-# 4. Main App Logic
-st.title("📝 Student Exam Portal")
-
-if 'exam_data' not in st.session_state:
-    st.warning("👋 Welcome! Please wait for your teacher to upload the exam file in the dashboard.")
-else:
-    st.info("💡 Instructions: Read the questions carefully. Math symbols are displayed professionally.")
+    # Ipakita ang PDF sa screen
+    base64_pdf = base64.b64encode(uploaded_file.read()).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="1000" type="application/pdf"></iframe>'
     
-    questions = st.session_state.exam_data
-    responses = {}
-
-    # The Exam Form
-    with st.form("student_exam"):
-        for i, q in enumerate(questions):
-            st.markdown(f"### Question {i+1}")
-            st.write(q['question_text'])
-            
-            # This renders the "Professional" Math (Fractions/Exponents)
-            if "math_formula" in q and q['math_formula']:
-                st.latex(q['math_formula'])
-            
-            # Answer input
-            if q['type'] == "multiple_choice":
-                responses[i] = st.radio("Choose the best answer:", q['options'], key=f"q_{i}")
-            else:
-                responses[i] = st.text_input("Type your answer here:", key=f"q_{i}")
-            
-            st.divider()
-
-        # Submit
-        submitted = st.form_submit_button("Submit Final Answers")
-
-    if submitted:
-        score = 0
-        total = len(questions)
+    st.markdown(pdf_display, unsafe_allow_html=True)
+    
+    # Lagayan ng sagot sa ilalim
+    with st.form("answers"):
+        st.write("### I-type ang inyong mga sagot dito:")
+        ans1 = st.text_input("Question 1")
+        ans2 = st.text_input("Question 2")
+        # Dagdagan mo lang ito base sa dami ng questions
         
-        for i, q in enumerate(questions):
-            if responses[i] == q['correct_answer']:
-                score += 1
-        
-        st.balloons()
-        st.success(f"### Exam Submitted!")
-        st.metric(label="Your Final Score", value=f"{score} / {total}")
-        st.write("Results have been recorded. You may now close this tab.")
+        submitted = st.form_submit_button("Submit Exam")
+        if submitted:
+            st.success("Tapos na! Na-record na ang iyong mga sagot.")
+else:
+    st.info("Teacher: Pakibukas ang sidebar sa kaliwa at i-upload ang PDF version ng exam.")
