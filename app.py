@@ -19,8 +19,7 @@ default_session = {
     "timer_running": False,
     "score": None,
     "feedback": {},
-    "questions": None,
-    "current_page": 0
+    "questions": None
 }
 for key, value in default_session.items():
     if key not in st.session_state:
@@ -40,7 +39,14 @@ timer_minutes = st.sidebar.number_input("⏱️ Exam Duration (minutes)", min_va
 
 # 4. Zoom control (lalabas lang kung may PDF)
 if pdf_file:
-    zoom_level = st.sidebar.slider("🔍 Zoom Level", min_value=1.0, max_value=4.0, value=2.5, step=0.1, help="Mas mataas = mas malaki ang text")
+    zoom_level = st.sidebar.slider(
+        "🔍 Zoom Level (para sa linaw)", 
+        min_value=2.0, 
+        max_value=5.0, 
+        value=3.0, 
+        step=0.2,
+        help="Mas mataas = mas malaki at mas malinaw ang text. Pwedeng mag-scroll pababa para makita lahat ng pages."
+    )
 
 # Load questions from JSON
 if json_file and st.session_state.questions is None:
@@ -57,44 +63,39 @@ st.title("📝 Computer-Based Exam with Automatic Scoring")
 if pdf_file:
     col1, col2 = st.columns([1.3, 1])  # Mas malawak na space para sa PDF
     with col1:
-        st.subheader("📄 Exam Paper")
+        st.subheader("📄 Exam Paper (lahat ng pages)")
         
         try:
             pdf_bytes = pdf_file.getvalue()
             pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
             total_pages = len(pdf_document)
             
-            # Page navigation
-            if total_pages > 1:
-                nav_col1, nav_col2, nav_col3 = st.columns([1, 3, 1])
-                with nav_col1:
-                    if st.button("◀ Previous") and st.session_state.current_page > 0:
-                        st.session_state.current_page -= 1
-                with nav_col2:
-                    st.write(f"Page {st.session_state.current_page + 1} of {total_pages}")
-                with nav_col3:
-                    if st.button("Next ▶") and st.session_state.current_page < total_pages - 1:
-                        st.session_state.current_page += 1
+            st.info(f"📄 May {total_pages} na pahina. Mag-scroll pababa para makita lahat.")
             
-            # Display current page with high resolution
-            page = pdf_document.load_page(st.session_state.current_page)
-            matrix = fitz.Matrix(zoom_level, zoom_level)  # Zoom based on slider
-            pix = page.get_pixmap(matrix=matrix, alpha=False)
-            img_data = pix.tobytes("png")
-            img = Image.open(BytesIO(img_data))
-            
-            # Use container width but ensure high quality
-            st.image(img, caption=f"Page {st.session_state.current_page + 1}", use_container_width=True)
-            
-            # Option to open full screen (new tab)
-            img_bytes = BytesIO()
-            img.save(img_bytes, format='PNG')
-            st.download_button(
-                "🔍 Buksan sa bagong tab (malaki)",
-                data=img_bytes.getvalue(),
-                file_name=f"page_{st.session_state.current_page+1}.png",
-                mime="image/png"
-            )
+            # Loop through all pages and display each with high resolution
+            for page_num in range(total_pages):
+                page = pdf_document.load_page(page_num)
+                # Use high matrix value for 300 DPI equivalent
+                matrix = fitz.Matrix(zoom_level, zoom_level)
+                pix = page.get_pixmap(matrix=matrix, alpha=False)
+                img_data = pix.tobytes("png")
+                img = Image.open(BytesIO(img_data))
+                
+                # Display image with full width, high clarity
+                st.image(img, caption=f"Pahina {page_num + 1}", use_container_width=True)
+                
+                # Option to download this page as high-res PNG
+                img_bytes = BytesIO()
+                img.save(img_bytes, format='PNG')
+                st.download_button(
+                    f"📥 I-download ang Pahina {page_num + 1} (high-res)",
+                    data=img_bytes.getvalue(),
+                    file_name=f"page_{page_num+1}.png",
+                    mime="image/png",
+                    key=f"download_page_{page_num}"
+                )
+                
+                st.markdown("---")  # Separator between pages
             
             pdf_document.close()
         except Exception as e:
