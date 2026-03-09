@@ -35,7 +35,7 @@ st.sidebar.header("🛠️ Admin Panel (Teacher Only)")
 
 # Password protection para sa upload (para hindi basta-basta makapagpalit ang estudyante)
 admin_password = st.sidebar.text_input("🔑 Admin Password", type="password")
-CORRECT_PASSWORD = "exam2024"  # Palitan ito ng gusto mong password
+CORRECT_PASSWORD = "exam2026"  # Palitan ito ng gusto mong password
 
 if admin_password == CORRECT_PASSWORD:
     st.sidebar.success("✅ Admin mode activated")
