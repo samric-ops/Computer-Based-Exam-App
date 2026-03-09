@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "question": "Solve the following linear equation for x:",
+    "math_content": "\\frac{4x}{5} + 7 = 15",
+    "type": "multiple_choice",
+    "options": ["10", "12", "8", "15"],
+    "answer": "10"
+  },
+  {
+    "id": 2,
+    "question": "Simplify the following expression:",
+    "math_content": "(x^2 \cdot x^3) + \\sqrt{144}",
+    "type": "multiple_choice",
+    "options": ["x^5 + 12", "x^6 + 12", "x^5 + 14", "x^6 + 14"],
+    "answer": "x^5 + 12"
+  },
+  {
+    "id": 3,
+    "question": "What is the result of the fraction below?",
+    "math_content": "\\frac{1}{2} + \\frac{1}{4}",
+    "type": "text_input",
+    "options": [],
+    "answer": "3/4"
+  }
+]
