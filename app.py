@@ -53,17 +53,23 @@ if admin_password == CORRECT_PASSWORD:
             if uploaded_json:
                 try:
                     raw_data = json.load(uploaded_json)
-                    # Auto-detect: kung may "questions" key, i-extract
-                    if isinstance(raw_data, dict) and "questions" in raw_data:
-                        questions_data = raw_data["questions"]
+                    # Kung may "questions" key, kunin ang laman
+                    if isinstance(raw_data, dict):
+                        if "questions" in raw_data:
+                            questions_data = raw_data["questions"]
+                        elif "exam" in raw_data:  # Baka ibang key
+                            questions_data = raw_data["exam"]
+                        else:
+                            st.sidebar.error("❌ Hindi mahanap ang 'questions' key. Ipinapakita ang buong JSON sa debug.")
+                            questions_data = None
                     elif isinstance(raw_data, list):
                         questions_data = raw_data
                     else:
-                        st.sidebar.error("❌ Invalid JSON format: dapat list o { 'questions': [...] }")
+                        st.sidebar.error("❌ Invalid JSON format")
                         questions_data = None
                     
                     if questions_data is not None:
-                        # I-save bilang list (para sure)
+                        # I-save bilang list
                         with open(JSON_PATH, "w") as f:
                             json.dump(questions_data, f)
                         st.sidebar.success(f"✅ JSON saved with {len(questions_data)} questions")
@@ -80,14 +86,29 @@ if admin_password == CORRECT_PASSWORD:
             st.sidebar.success("✅ Exam cleared")
             st.rerun()
     
-    # Debug info
-    with st.sidebar.expander("📁 File Status", expanded=True):
+    # Debug info (expanded by default)
+    with st.sidebar.expander("📁 File Status & Debug", expanded=True):
         st.write(f"PDF exists: {os.path.exists(PDF_PATH)}")
         if os.path.exists(PDF_PATH):
             st.write(f"PDF size: {os.path.getsize(PDF_PATH)} bytes")
         st.write(f"JSON exists: {os.path.exists(JSON_PATH)}")
         if os.path.exists(JSON_PATH):
             st.write(f"JSON size: {os.path.getsize(JSON_PATH)} bytes")
+            try:
+                with open(JSON_PATH, "r") as f:
+                    debug_data = json.load(f)
+                st.write("**JSON content preview:**")
+                st.write(f"Type: {type(debug_data)}")
+                if isinstance(debug_data, list):
+                    st.write(f"Number of items: {len(debug_data)}")
+                    if len(debug_data) > 0:
+                        st.write("First item:", debug_data[0])
+                elif isinstance(debug_data, dict):
+                    st.write("Keys:", list(debug_data.keys()))
+                else:
+                    st.write("Unexpected data:", debug_data)
+            except Exception as e:
+                st.write(f"Error reading JSON for debug: {e}")
 else:
     st.sidebar.info("👩‍🏫 Enter admin password to upload exam.")
 
@@ -106,14 +127,24 @@ if os.path.exists(JSON_PATH):
     try:
         with open(JSON_PATH, "r") as f:
             raw = json.load(f)
-        # Auto-detect ulit sa loading (kung sakaling may wrapper pa rin)
-        if isinstance(raw, dict) and "questions" in raw:
-            questions = raw["questions"]
-        elif isinstance(raw, list):
+        # Auto-detect structure (flexible)
+        if isinstance(raw, list):
             questions = raw
+        elif isinstance(raw, dict):
+            # Try common keys
+            if "questions" in raw:
+                questions = raw["questions"]
+            elif "exam" in raw:
+                questions = raw["exam"]
+            elif "quiz" in raw:
+                questions = raw["quiz"]
+            else:
+                # Maybe the whole dict is a single question? Unlikely, but handle gracefully
+                questions = [raw]  # Treat as one question
+                json_error = "Warning: JSON is a dict without 'questions' key; treated as single question."
         else:
             questions = None
-            json_error = "JSON is neither a list nor an object with 'questions' key"
+            json_error = "JSON is neither list nor dict."
     except Exception as e:
         json_error = str(e)
         questions = None
@@ -140,6 +171,11 @@ if not pdf_bytes or not questions:
     st.warning("⏳ Waiting for teacher to upload the exam. Please wait...")
     if json_error:
         st.error(f"JSON error: {json_error}")
+    st.stop()
+
+# If questions is empty list, still show error
+if len(questions) == 0:
+    st.error("⚠️ The uploaded JSON contains no questions. Please check the file.")
     st.stop()
 
 # Display exam in two columns
