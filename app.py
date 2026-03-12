@@ -32,9 +32,8 @@ for key, value in default_session.items():
 # ---------------------------- SIDEBAR (Teacher/Admin Panel) ----------
 st.sidebar.header("🛠️ Admin Panel (Teacher Only)")
 
-# Password protection
 admin_password = st.sidebar.text_input("🔑 Admin Password", type="password")
-CORRECT_PASSWORD = "exam2024"  # Palitan kung gusto
+CORRECT_PASSWORD = "exam2024"
 
 if admin_password == CORRECT_PASSWORD:
     st.sidebar.success("✅ Admin mode activated")
@@ -53,26 +52,10 @@ if admin_password == CORRECT_PASSWORD:
             if uploaded_json:
                 try:
                     raw_data = json.load(uploaded_json)
-                    # Kung may "questions" key, kunin ang laman
-                    if isinstance(raw_data, dict):
-                        if "questions" in raw_data:
-                            questions_data = raw_data["questions"]
-                        elif "exam" in raw_data:  # Baka ibang key
-                            questions_data = raw_data["exam"]
-                        else:
-                            st.sidebar.error("❌ Hindi mahanap ang 'questions' key. Ipinapakita ang buong JSON sa debug.")
-                            questions_data = None
-                    elif isinstance(raw_data, list):
-                        questions_data = raw_data
-                    else:
-                        st.sidebar.error("❌ Invalid JSON format")
-                        questions_data = None
-                    
-                    if questions_data is not None:
-                        # I-save bilang list
-                        with open(JSON_PATH, "w") as f:
-                            json.dump(questions_data, f)
-                        st.sidebar.success(f"✅ JSON saved with {len(questions_data)} questions")
+                    # I-save ang original para makita sa debug
+                    with open(JSON_PATH, "w") as f:
+                        json.dump(raw_data, f)
+                    st.sidebar.success(f"✅ JSON saved")
                 except Exception as e:
                     st.sidebar.error(f"❌ Error reading JSON: {e}")
             
@@ -86,29 +69,26 @@ if admin_password == CORRECT_PASSWORD:
             st.sidebar.success("✅ Exam cleared")
             st.rerun()
     
-    # Debug info (expanded by default)
-    with st.sidebar.expander("📁 File Status & Debug", expanded=True):
-        st.write(f"PDF exists: {os.path.exists(PDF_PATH)}")
-        if os.path.exists(PDF_PATH):
-            st.write(f"PDF size: {os.path.getsize(PDF_PATH)} bytes")
-        st.write(f"JSON exists: {os.path.exists(JSON_PATH)}")
+    # DEBUG: Show raw JSON content
+    with st.sidebar.expander("🔍 JSON Debug Viewer", expanded=True):
         if os.path.exists(JSON_PATH):
-            st.write(f"JSON size: {os.path.getsize(JSON_PATH)} bytes")
             try:
                 with open(JSON_PATH, "r") as f:
-                    debug_data = json.load(f)
-                st.write("**JSON content preview:**")
-                st.write(f"Type: {type(debug_data)}")
-                if isinstance(debug_data, list):
-                    st.write(f"Number of items: {len(debug_data)}")
-                    if len(debug_data) > 0:
-                        st.write("First item:", debug_data[0])
-                elif isinstance(debug_data, dict):
-                    st.write("Keys:", list(debug_data.keys()))
-                else:
-                    st.write("Unexpected data:", debug_data)
+                    debug_json = json.load(f)
+                st.write("**Raw JSON content:**")
+                st.json(debug_json)  # Streamlit JSON viewer
+                st.write(f"**Type:** {type(debug_json)}")
+                if isinstance(debug_json, list):
+                    st.write(f"**Length:** {len(debug_json)}")
+                    if len(debug_json) > 0:
+                        st.write("**First item:**")
+                        st.write(debug_json[0])
+                elif isinstance(debug_json, dict):
+                    st.write(f"**Keys:** {list(debug_json.keys())}")
             except Exception as e:
-                st.write(f"Error reading JSON for debug: {e}")
+                st.write(f"Error reading JSON: {e}")
+        else:
+            st.write("No JSON file found.")
 else:
     st.sidebar.info("👩‍🏫 Enter admin password to upload exam.")
 
@@ -127,7 +107,8 @@ if os.path.exists(JSON_PATH):
     try:
         with open(JSON_PATH, "r") as f:
             raw = json.load(f)
-        # Auto-detect structure (flexible)
+        
+        # Intelligent extraction
         if isinstance(raw, list):
             questions = raw
         elif isinstance(raw, dict):
@@ -138,10 +119,15 @@ if os.path.exists(JSON_PATH):
                 questions = raw["exam"]
             elif "quiz" in raw:
                 questions = raw["quiz"]
+            elif "data" in raw:
+                questions = raw["data"]
             else:
-                # Maybe the whole dict is a single question? Unlikely, but handle gracefully
-                questions = [raw]  # Treat as one question
-                json_error = "Warning: JSON is a dict without 'questions' key; treated as single question."
+                # Maybe it's a single question object?
+                if "question" in raw:
+                    questions = [raw]  # Wrap as list
+                else:
+                    questions = None
+                    json_error = "No recognizable question array found."
         else:
             questions = None
             json_error = "JSON is neither list nor dict."
@@ -155,39 +141,42 @@ timer_minutes = st.sidebar.number_input("Exam Duration (minutes)", min_value=1, 
 
 if pdf_bytes:
     zoom_level = st.sidebar.slider(
-        "🔍 Zoom Level (linaw)",
+        "🔍 Zoom Level",
         min_value=2.0,
         max_value=5.0,
         value=3.0,
-        step=0.2,
-        help="Mas mataas = mas malaki at malinaw ang text."
+        step=0.2
     )
 
 # ---------------------------- MAIN UI ---------------------------------
 st.title("📝 Computer-Based Exam with Automatic Scoring")
 
-# Check if exam files are ready
-if not pdf_bytes or not questions:
-    st.warning("⏳ Waiting for teacher to upload the exam. Please wait...")
-    if json_error:
-        st.error(f"JSON error: {json_error}")
+# Display debug info in main area if something's wrong
+if json_error:
+    st.error(f"JSON Error: {json_error}")
+
+if not pdf_bytes:
+    st.warning("⏳ Waiting for teacher to upload the exam (PDF missing).")
     st.stop()
 
-# If questions is empty list, still show error
+if not questions:
+    st.warning("⏳ Waiting for teacher to upload the exam (JSON missing or invalid).")
+    st.stop()
+
 if len(questions) == 0:
-    st.error("⚠️ The uploaded JSON contains no questions. Please check the file.")
+    st.error("⚠️ The JSON file contains no questions.")
     st.stop()
 
 # Display exam in two columns
 col1, col2 = st.columns([1.3, 1])
 
 with col1:
-    st.subheader(f"📄 Exam Paper: {pdf_name} (lahat ng pages)")
+    st.subheader(f"📄 Exam Paper: {pdf_name}")
     
     try:
         pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
         total_pages = len(pdf_document)
-        st.info(f"📄 May {total_pages} na pahina. Mag-scroll pababa para makita lahat.")
+        st.info(f"📄 May {total_pages} na pahina. Mag-scroll pababa.")
         
         for page_num in range(total_pages):
             page = pdf_document.load_page(page_num)
@@ -195,18 +184,7 @@ with col1:
             pix = page.get_pixmap(matrix=matrix, alpha=False)
             img_data = pix.tobytes("png")
             img = Image.open(BytesIO(img_data))
-            
             st.image(img, caption=f"Pahina {page_num + 1}", use_container_width=True)
-            
-            img_bytes = BytesIO()
-            img.save(img_bytes, format='PNG')
-            st.download_button(
-                f"📥 I-download ang Pahina {page_num + 1} (high-res)",
-                data=img_bytes.getvalue(),
-                file_name=f"page_{page_num+1}.png",
-                mime="image/png",
-                key=f"download_page_{page_num}"
-            )
             st.markdown("---")
         
         pdf_document.close()
@@ -216,38 +194,45 @@ with col1:
 with col2:
     st.subheader("✍️ Answer Sheet")
     
+    # Timer
     timer_placeholder = st.empty()
     if st.session_state.timer_running:
         elapsed = datetime.now() - st.session_state.start_time
         remaining = timedelta(minutes=timer_minutes) - elapsed
         if remaining.total_seconds() <= 0:
-            st.warning("⏰ Tapos na ang oras! Isinusumite ang iyong mga sagot.")
+            st.warning("⏰ Tapos na ang oras!")
             st.session_state.submitted = True
             st.session_state.timer_running = False
             st.rerun()
         else:
-            timer_placeholder.info(f"⏳ Oras na natitira: {str(remaining).split('.')[0]}")
+            timer_placeholder.info(f"⏳ Oras: {str(remaining).split('.')[0]}")
             time.sleep(1)
             st.rerun()
     
+    # Answer form
     if not st.session_state.submitted:
         with st.form("exam_form"):
             st.write(f"Sagutin ang {len(questions)} na tanong.")
+            
             for idx, q in enumerate(questions, start=1):
                 q_key = f"Q{idx}"
+                
+                # Safe question display
                 if not isinstance(q, dict):
-                    st.error(f"Invalid question format at index {idx}")
+                    st.error(f"Question {idx} is not a valid object.")
                     continue
-                question_text = q.get("question", f"[MISSING QUESTION {idx}]")
+                
+                question_text = q.get("question", f"[NO QUESTION TEXT {idx}]")
                 st.markdown(f"**{idx}. {question_text}**")
                 
+                # Input type detection
                 if "options" in q and isinstance(q["options"], list):
                     options = q["options"]
                     default_index = 0
                     if q_key in st.session_state.answers and st.session_state.answers[q_key] in options:
                         default_index = options.index(st.session_state.answers[q_key])
                     answer = st.radio(
-                        "Piliin ang sagot:",
+                        "Piliin:",
                         options,
                         key=f"ans_{idx}",
                         index=default_index,
@@ -256,7 +241,7 @@ with col2:
                 elif q.get("type") == "number":
                     default = st.session_state.answers.get(q_key, 0.0)
                     answer = st.number_input(
-                        "Ilagay ang numero:",
+                        "Numero:",
                         value=default,
                         key=f"ans_{idx}",
                         label_visibility="collapsed"
@@ -264,7 +249,7 @@ with col2:
                 else:
                     default = st.session_state.answers.get(q_key, "")
                     answer = st.text_input(
-                        "Ilagay ang sagot:",
+                        "Sagot:",
                         value=default,
                         key=f"ans_{idx}",
                         label_visibility="collapsed"
@@ -281,6 +266,7 @@ with col2:
                 
                 st.session_state.submitted = True
                 
+                # Auto-grading
                 score = 0
                 feedback = {}
                 for idx, q in enumerate(questions, start=1):
@@ -294,19 +280,19 @@ with col2:
                         else:
                             feedback[q_key] = f"❌ Mali (Tamang sagot: {correct})"
                     else:
-                        feedback[q_key] = "ℹ️ Walang tamang sagot na nakaset"
+                        feedback[q_key] = "ℹ️ Walang tamang sagot"
                 
                 st.session_state.score = score
                 st.session_state.feedback = feedback
                 st.rerun()
     else:
-        st.success("✅ Naipasa na ang iyong eksamen!")
+        st.success("✅ Naipasa na ang eksamen!")
         
         if st.session_state.score is not None:
             total = len(questions)
-            st.metric("Iyong Marka", f"{st.session_state.score} / {total}")
+            st.metric("Marka", f"{st.session_state.score} / {total}")
             
-            with st.expander("📋 Tingnan ang detailed feedback"):
+            with st.expander("📋 Feedback"):
                 for q_key, fb in st.session_state.feedback.items():
                     st.write(f"{q_key}: {fb}")
         
@@ -314,14 +300,10 @@ with col2:
         for q_key, ans in st.session_state.answers.items():
             st.write(f"{q_key}: {ans}")
         
+        # Download CSV
         df = pd.DataFrame(list(st.session_state.answers.items()), columns=["Tanong", "Sagot"])
         csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            "📥 I-download ang mga Sagot (CSV)",
-            data=csv,
-            file_name="my_answers.csv",
-            mime="text/csv"
-        )
+        st.download_button("📥 I-download CSV", data=csv, file_name="my_answers.csv", mime="text/csv")
         
         if st.button("🔄 Muling Mag-exam"):
             for key in default_session.keys():
