@@ -39,24 +39,21 @@ CORRECT_PASSWORD = "exam2024"  # Palitan kung gusto
 if admin_password == CORRECT_PASSWORD:
     st.sidebar.success("✅ Admin mode activated")
     
-    # Upload widgets
     uploaded_pdf = st.sidebar.file_uploader("📄 Upload Exam PDF", type=["pdf"])
     uploaded_json = st.sidebar.file_uploader("📊 Upload Questions JSON", type=["json"])
     
     col1, col2 = st.sidebar.columns(2)
     with col1:
         if st.button("📤 Set as Current Exam"):
-            # Save PDF
             if uploaded_pdf:
                 with open(PDF_PATH, "wb") as f:
                     f.write(uploaded_pdf.getvalue())
                 st.sidebar.success("✅ PDF saved")
             
-            # Save JSON with validation
             if uploaded_json:
                 try:
                     raw_data = json.load(uploaded_json)
-                    # Auto-detect structure: if it's a dict with 'questions' key, extract it
+                    # Auto-detect: kung may "questions" key, i-extract
                     if isinstance(raw_data, dict) and "questions" in raw_data:
                         questions_data = raw_data["questions"]
                     elif isinstance(raw_data, list):
@@ -66,17 +63,10 @@ if admin_password == CORRECT_PASSWORD:
                         questions_data = None
                     
                     if questions_data is not None:
-                        # Basic validation: each item should have 'question'
-                        valid = True
-                        for i, q in enumerate(questions_data):
-                            if not isinstance(q, dict) or "question" not in q:
-                                st.sidebar.error(f"❌ Question {i+1} missing 'question' field")
-                                valid = False
-                                break
-                        if valid:
-                            with open(JSON_PATH, "w") as f:
-                                json.dump(questions_data, f)
-                            st.sidebar.success(f"✅ JSON saved with {len(questions_data)} questions")
+                        # I-save bilang list (para sure)
+                        with open(JSON_PATH, "w") as f:
+                            json.dump(questions_data, f)
+                        st.sidebar.success(f"✅ JSON saved with {len(questions_data)} questions")
                 except Exception as e:
                     st.sidebar.error(f"❌ Error reading JSON: {e}")
             
@@ -90,8 +80,8 @@ if admin_password == CORRECT_PASSWORD:
             st.sidebar.success("✅ Exam cleared")
             st.rerun()
     
-    # Debug: Show file status
-    with st.sidebar.expander("📁 File Status"):
+    # Debug info
+    with st.sidebar.expander("📁 File Status", expanded=True):
         st.write(f"PDF exists: {os.path.exists(PDF_PATH)}")
         if os.path.exists(PDF_PATH):
             st.write(f"PDF size: {os.path.getsize(PDF_PATH)} bytes")
@@ -115,11 +105,15 @@ if os.path.exists(PDF_PATH):
 if os.path.exists(JSON_PATH):
     try:
         with open(JSON_PATH, "r") as f:
-            questions = json.load(f)
-        # Ensure it's a list
-        if not isinstance(questions, list):
-            json_error = "JSON is not a list"
+            raw = json.load(f)
+        # Auto-detect ulit sa loading (kung sakaling may wrapper pa rin)
+        if isinstance(raw, dict) and "questions" in raw:
+            questions = raw["questions"]
+        elif isinstance(raw, list):
+            questions = raw
+        else:
             questions = None
+            json_error = "JSON is neither a list nor an object with 'questions' key"
     except Exception as e:
         json_error = str(e)
         questions = None
@@ -128,7 +122,6 @@ if os.path.exists(JSON_PATH):
 st.sidebar.header("⏱️ Exam Settings")
 timer_minutes = st.sidebar.number_input("Exam Duration (minutes)", min_value=1, max_value=180, value=60, step=5)
 
-# Zoom control (only if PDF exists)
 if pdf_bytes:
     zoom_level = st.sidebar.slider(
         "🔍 Zoom Level (linaw)",
@@ -169,7 +162,6 @@ with col1:
             
             st.image(img, caption=f"Pahina {page_num + 1}", use_container_width=True)
             
-            # Download button per page (high-res)
             img_bytes = BytesIO()
             img.save(img_bytes, format='PNG')
             st.download_button(
@@ -188,7 +180,6 @@ with col1:
 with col2:
     st.subheader("✍️ Answer Sheet")
     
-    # ---------------------------- TIMER ------------------------------
     timer_placeholder = st.empty()
     if st.session_state.timer_running:
         elapsed = datetime.now() - st.session_state.start_time
@@ -203,20 +194,18 @@ with col2:
             time.sleep(1)
             st.rerun()
     
-    # ---------------------------- ANSWER FORM ------------------------
     if not st.session_state.submitted:
         with st.form("exam_form"):
             st.write(f"Sagutin ang {len(questions)} na tanong.")
             for idx, q in enumerate(questions, start=1):
                 q_key = f"Q{idx}"
-                # Safety: ensure q is dict and has 'question'
                 if not isinstance(q, dict):
                     st.error(f"Invalid question format at index {idx}")
                     continue
                 question_text = q.get("question", f"[MISSING QUESTION {idx}]")
                 st.markdown(f"**{idx}. {question_text}**")
                 
-                if "options" in q and isinstance(q["options"], list):  # Multiple choice
+                if "options" in q and isinstance(q["options"], list):
                     options = q["options"]
                     default_index = 0
                     if q_key in st.session_state.answers and st.session_state.answers[q_key] in options:
@@ -228,7 +217,7 @@ with col2:
                         index=default_index,
                         label_visibility="collapsed"
                     )
-                elif q.get("type") == "number":  # Number input
+                elif q.get("type") == "number":
                     default = st.session_state.answers.get(q_key, 0.0)
                     answer = st.number_input(
                         "Ilagay ang numero:",
@@ -236,7 +225,7 @@ with col2:
                         key=f"ans_{idx}",
                         label_visibility="collapsed"
                     )
-                else:  # Text input
+                else:
                     default = st.session_state.answers.get(q_key, "")
                     answer = st.text_input(
                         "Ilagay ang sagot:",
@@ -256,7 +245,6 @@ with col2:
                 
                 st.session_state.submitted = True
                 
-                # Auto-grading
                 score = 0
                 feedback = {}
                 for idx, q in enumerate(questions, start=1):
@@ -276,7 +264,6 @@ with col2:
                 st.session_state.feedback = feedback
                 st.rerun()
     else:
-        # ---------------------------- RESULTS ----------------------------
         st.success("✅ Naipasa na ang iyong eksamen!")
         
         if st.session_state.score is not None:
@@ -291,7 +278,6 @@ with col2:
         for q_key, ans in st.session_state.answers.items():
             st.write(f"{q_key}: {ans}")
         
-        # Download answers as CSV
         df = pd.DataFrame(list(st.session_state.answers.items()), columns=["Tanong", "Sagot"])
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button(
