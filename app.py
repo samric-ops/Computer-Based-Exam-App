@@ -11,6 +11,19 @@ from PIL import Image
 # ---------------------------- PAGE CONFIG ----------------------------
 st.set_page_config(page_title="Computer-Based Exam", layout="wide")
 
+# (Optional) Custom CSS para baguhin ang kulay ng selected radio button (kung ayaw ng pula)
+st.markdown("""
+<style>
+    /* Baguhin ang kulay ng selected radio button sa asul (opsyonal) */
+    div[data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child {
+        color: #1E88E5 !important;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child > div {
+        background-color: #1E88E5 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ---------------------------- PATHS FOR SHARED FILES -----------------
 PDF_PATH = "/tmp/exam.pdf"
 JSON_PATH = "/tmp/exam_questions.json"
@@ -53,14 +66,13 @@ if admin_password == CORRECT_PASSWORD:
             if uploaded_json:
                 try:
                     raw_data = json.load(uploaded_json)
-                    # Kung may "questions" key, kunin ang laman
                     if isinstance(raw_data, dict):
                         if "questions" in raw_data:
                             questions_data = raw_data["questions"]
-                        elif "exam" in raw_data:  # Baka ibang key
+                        elif "exam" in raw_data:
                             questions_data = raw_data["exam"]
                         else:
-                            st.sidebar.error("❌ Hindi mahanap ang 'questions' key. Ipinapakita ang buong JSON sa debug.")
+                            st.sidebar.error("❌ Hindi mahanap ang 'questions' key.")
                             questions_data = None
                     elif isinstance(raw_data, list):
                         questions_data = raw_data
@@ -69,7 +81,6 @@ if admin_password == CORRECT_PASSWORD:
                         questions_data = None
                     
                     if questions_data is not None:
-                        # I-save bilang list
                         with open(JSON_PATH, "w") as f:
                             json.dump(questions_data, f)
                         st.sidebar.success(f"✅ JSON saved with {len(questions_data)} questions")
@@ -86,14 +97,13 @@ if admin_password == CORRECT_PASSWORD:
             st.sidebar.success("✅ Exam cleared")
             st.rerun()
     
-    # Debug info (expanded by default)
+    # Debug info
     with st.sidebar.expander("📁 File Status & Debug", expanded=True):
         st.write(f"PDF exists: {os.path.exists(PDF_PATH)}")
         if os.path.exists(PDF_PATH):
             st.write(f"PDF size: {os.path.getsize(PDF_PATH)} bytes")
         st.write(f"JSON exists: {os.path.exists(JSON_PATH)}")
         if os.path.exists(JSON_PATH):
-            st.write(f"JSON size: {os.path.getsize(JSON_PATH)} bytes")
             try:
                 with open(JSON_PATH, "r") as f:
                     debug_data = json.load(f)
@@ -105,8 +115,6 @@ if admin_password == CORRECT_PASSWORD:
                         st.write("First item:", debug_data[0])
                 elif isinstance(debug_data, dict):
                     st.write("Keys:", list(debug_data.keys()))
-                else:
-                    st.write("Unexpected data:", debug_data)
             except Exception as e:
                 st.write(f"Error reading JSON for debug: {e}")
 else:
@@ -127,11 +135,9 @@ if os.path.exists(JSON_PATH):
     try:
         with open(JSON_PATH, "r") as f:
             raw = json.load(f)
-        # Auto-detect structure (flexible)
         if isinstance(raw, list):
             questions = raw
         elif isinstance(raw, dict):
-            # Try common keys
             if "questions" in raw:
                 questions = raw["questions"]
             elif "exam" in raw:
@@ -139,8 +145,7 @@ if os.path.exists(JSON_PATH):
             elif "quiz" in raw:
                 questions = raw["quiz"]
             else:
-                # Maybe the whole dict is a single question? Unlikely, but handle gracefully
-                questions = [raw]  # Treat as one question
+                questions = [raw]
                 json_error = "Warning: JSON is a dict without 'questions' key; treated as single question."
         else:
             questions = None
@@ -163,6 +168,30 @@ if pdf_bytes:
         help="Mas mataas = mas malaki at malinaw ang text."
     )
 
+# ---------------------------- FUNCTIONS ------------------------------
+def compute_score_and_feedback():
+    """Kumuha ng mga sagot mula sa widget keys at kalkulahin ang marka at feedback."""
+    score = 0
+    feedback = {}
+    answers = {}
+    for idx, q in enumerate(questions, start=1):
+        q_key = f"Q{idx}"
+        widget_key = f"ans_{idx}"
+        user_ans = st.session_state.get(widget_key, "")
+        answers[q_key] = user_ans
+        correct = q.get("correct")
+        if correct is not None:
+            if str(user_ans).strip().upper() == str(correct).strip().upper():
+                score += 1
+                feedback[q_key] = "✅ Tama"
+            else:
+                feedback[q_key] = f"❌ Mali (Tamang sagot: {correct})"
+        else:
+            feedback[q_key] = "ℹ️ Walang tamang sagot na nakaset"
+    st.session_state.answers = answers
+    st.session_state.score = score
+    st.session_state.feedback = feedback
+
 # ---------------------------- MAIN UI ---------------------------------
 st.title("📝 Computer-Based Exam with Automatic Scoring")
 
@@ -173,7 +202,6 @@ if not pdf_bytes or not questions:
         st.error(f"JSON error: {json_error}")
     st.stop()
 
-# If questions is empty list, still show error
 if len(questions) == 0:
     st.error("⚠️ The uploaded JSON contains no questions. Please check the file.")
     st.stop()
@@ -183,7 +211,6 @@ col1, col2 = st.columns([1.3, 1])
 
 with col1:
     st.subheader(f"📄 Exam Paper: {pdf_name} (lahat ng pages)")
-    
     try:
         pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
         total_pages = len(pdf_document)
@@ -217,11 +244,12 @@ with col2:
     st.subheader("✍️ Answer Sheet")
     
     timer_placeholder = st.empty()
-    if st.session_state.timer_running:
+    if st.session_state.timer_running and not st.session_state.submitted:
         elapsed = datetime.now() - st.session_state.start_time
         remaining = timedelta(minutes=timer_minutes) - elapsed
         if remaining.total_seconds() <= 0:
             st.warning("⏰ Tapos na ang oras! Isinusumite ang iyong mga sagot.")
+            compute_score_and_feedback()
             st.session_state.submitted = True
             st.session_state.timer_running = False
             st.rerun()
@@ -231,75 +259,73 @@ with col2:
             st.rerun()
     
     if not st.session_state.submitted:
-        with st.form("exam_form"):
-            st.write(f"Sagutin ang {len(questions)} na tanong.")
-            for idx, q in enumerate(questions, start=1):
-                q_key = f"Q{idx}"
-                if not isinstance(q, dict):
-                    st.error(f"Invalid question format at index {idx}")
-                    continue
-                question_text = q.get("question", f"[MISSING QUESTION {idx}]")
-                st.markdown(f"**{idx}. {question_text}**")
-                
-                if "options" in q and isinstance(q["options"], list):
-                    options = q["options"]
-                    default_index = 0
-                    if q_key in st.session_state.answers and st.session_state.answers[q_key] in options:
-                        default_index = options.index(st.session_state.answers[q_key])
-                    answer = st.radio(
-                        "Piliin ang sagot:",
-                        options,
-                        key=f"ans_{idx}",
-                        index=default_index,
-                        label_visibility="collapsed"
-                    )
-                elif q.get("type") == "number":
-                    default = st.session_state.answers.get(q_key, 0.0)
-                    answer = st.number_input(
-                        "Ilagay ang numero:",
-                        value=default,
-                        key=f"ans_{idx}",
-                        label_visibility="collapsed"
-                    )
-                else:
-                    default = st.session_state.answers.get(q_key, "")
-                    answer = st.text_input(
-                        "Ilagay ang sagot:",
-                        value=default,
-                        key=f"ans_{idx}",
-                        label_visibility="collapsed"
-                    )
-                
-                st.session_state.answers[q_key] = answer
+        st.write(f"Sagutin ang {len(questions)} na tanong. Makikita mo agad ang feedback pagkatapos pumili.")
+        
+        for idx, q in enumerate(questions, start=1):
+            q_key = f"Q{idx}"
+            widget_key = f"ans_{idx}"
             
-            submitted = st.form_submit_button("✅ Isumite ang mga Sagot")
+            question_text = q.get("question", f"[MISSING QUESTION {idx}]")
+            st.markdown(f"**{idx}. {question_text}**")
             
-            if submitted:
-                if not st.session_state.timer_running and timer_minutes > 0:
-                    st.session_state.start_time = datetime.now()
-                    st.session_state.timer_running = True
+            # Input field batay sa uri ng tanong
+            if "options" in q and isinstance(q["options"], list):
+                options = q["options"]
+                # Kunin ang kasalukuyang halaga para ma-preserve ang selection
+                current_value = st.session_state.get(widget_key)
+                default_index = None
+                if current_value is not None and current_value in options:
+                    default_index = options.index(current_value)
                 
-                st.session_state.submitted = True
-                
-                score = 0
-                feedback = {}
-                for idx, q in enumerate(questions, start=1):
-                    q_key = f"Q{idx}"
-                    user_ans = st.session_state.answers.get(q_key, "")
-                    correct = q.get("correct")
-                    if correct is not None:
-                        if str(user_ans).strip().upper() == str(correct).strip().upper():
-                            score += 1
-                            feedback[q_key] = "✅ Tama"
-                        else:
-                            feedback[q_key] = f"❌ Mali (Tamang sagot: {correct})"
+                st.radio(
+                    "Piliin ang sagot:",
+                    options,
+                    key=widget_key,
+                    index=default_index,
+                    label_visibility="collapsed"
+                )
+            elif q.get("type") == "number":
+                default = st.session_state.get(widget_key, 0.0)
+                st.number_input(
+                    "Ilagay ang numero:",
+                    value=default,
+                    key=widget_key,
+                    label_visibility="collapsed"
+                )
+            else:
+                default = st.session_state.get(widget_key, "")
+                st.text_input(
+                    "Ilagay ang sagot:",
+                    value=default,
+                    key=widget_key,
+                    label_visibility="collapsed"
+                )
+            
+            # Agarang feedback (lalabas pagkatapos pumili)
+            correct = q.get("correct")
+            if correct is not None:
+                user_ans = st.session_state.get(widget_key)
+                if user_ans is not None and user_ans != "":
+                    if str(user_ans).strip().upper() == str(correct).strip().upper():
+                        st.success("✅ Tama")
                     else:
-                        feedback[q_key] = "ℹ️ Walang tamang sagot na nakaset"
-                
-                st.session_state.score = score
-                st.session_state.feedback = feedback
-                st.rerun()
+                        st.error(f"❌ Mali. Tamang sagot: {correct}")
+                else:
+                    st.info("⏳ Pumili ng sagot.")
+            else:
+                st.info("ℹ️ Walang tamang sagot na nakaset.")
+            
+            st.markdown("---")
+        
+        # Final submit button
+        if st.button("✅ Isumite ang mga Sagot (Tapos na)"):
+            compute_score_and_feedback()
+            st.session_state.submitted = True
+            st.session_state.timer_running = False
+            st.rerun()
+    
     else:
+        # After submission: display results
         st.success("✅ Naipasa na ang iyong eksamen!")
         
         if st.session_state.score is not None:
@@ -327,4 +353,5 @@ with col2:
             for key in default_session.keys():
                 if key in st.session_state:
                     del st.session_state[key]
+            # Linisin din ang mga widget keys
             st.rerun()
