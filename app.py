@@ -34,7 +34,7 @@ st.sidebar.header("🛠️ Admin Panel (Teacher Only)")
 
 # Password protection
 admin_password = st.sidebar.text_input("🔑 Admin Password", type="password")
-CORRECT_PASSWORD = "exam2024"  # Change this as needed
+CORRECT_PASSWORD = "exam2024"  # Palitan kung gusto
 
 if admin_password == CORRECT_PASSWORD:
     st.sidebar.success("✅ Admin mode activated")
@@ -46,19 +46,40 @@ if admin_password == CORRECT_PASSWORD:
     col1, col2 = st.sidebar.columns(2)
     with col1:
         if st.button("📤 Set as Current Exam"):
+            # Save PDF
             if uploaded_pdf:
                 with open(PDF_PATH, "wb") as f:
                     f.write(uploaded_pdf.getvalue())
                 st.sidebar.success("✅ PDF saved")
+            
+            # Save JSON with validation
             if uploaded_json:
                 try:
-                    questions_data = json.load(uploaded_json)
-                    with open(JSON_PATH, "w") as f:
-                        json.dump(questions_data, f)
-                    st.sidebar.success(f"✅ JSON saved with {len(questions_data)} questions")
+                    raw_data = json.load(uploaded_json)
+                    # Auto-detect structure: if it's a dict with 'questions' key, extract it
+                    if isinstance(raw_data, dict) and "questions" in raw_data:
+                        questions_data = raw_data["questions"]
+                    elif isinstance(raw_data, list):
+                        questions_data = raw_data
+                    else:
+                        st.sidebar.error("❌ Invalid JSON format: dapat list o { 'questions': [...] }")
+                        questions_data = None
+                    
+                    if questions_data is not None:
+                        # Basic validation: each item should have 'question'
+                        valid = True
+                        for i, q in enumerate(questions_data):
+                            if not isinstance(q, dict) or "question" not in q:
+                                st.sidebar.error(f"❌ Question {i+1} missing 'question' field")
+                                valid = False
+                                break
+                        if valid:
+                            with open(JSON_PATH, "w") as f:
+                                json.dump(questions_data, f)
+                            st.sidebar.success(f"✅ JSON saved with {len(questions_data)} questions")
                 except Exception as e:
-                    st.sidebar.error(f"❌ Invalid JSON: {e}")
-            # Force reload by rerunning
+                    st.sidebar.error(f"❌ Error reading JSON: {e}")
+            
             st.rerun()
     
     with col2:
@@ -68,6 +89,15 @@ if admin_password == CORRECT_PASSWORD:
                     os.remove(path)
             st.sidebar.success("✅ Exam cleared")
             st.rerun()
+    
+    # Debug: Show file status
+    with st.sidebar.expander("📁 File Status"):
+        st.write(f"PDF exists: {os.path.exists(PDF_PATH)}")
+        if os.path.exists(PDF_PATH):
+            st.write(f"PDF size: {os.path.getsize(PDF_PATH)} bytes")
+        st.write(f"JSON exists: {os.path.exists(JSON_PATH)}")
+        if os.path.exists(JSON_PATH):
+            st.write(f"JSON size: {os.path.getsize(JSON_PATH)} bytes")
 else:
     st.sidebar.info("👩‍🏫 Enter admin password to upload exam.")
 
@@ -75,6 +105,7 @@ else:
 pdf_bytes = None
 questions = None
 pdf_name = None
+json_error = None
 
 if os.path.exists(PDF_PATH):
     with open(PDF_PATH, "rb") as f:
@@ -82,8 +113,16 @@ if os.path.exists(PDF_PATH):
     pdf_name = os.path.basename(PDF_PATH)
 
 if os.path.exists(JSON_PATH):
-    with open(JSON_PATH, "r") as f:
-        questions = json.load(f)
+    try:
+        with open(JSON_PATH, "r") as f:
+            questions = json.load(f)
+        # Ensure it's a list
+        if not isinstance(questions, list):
+            json_error = "JSON is not a list"
+            questions = None
+    except Exception as e:
+        json_error = str(e)
+        questions = None
 
 # ---------------------------- TIMER SETTING --------------------------
 st.sidebar.header("⏱️ Exam Settings")
@@ -103,10 +142,12 @@ if pdf_bytes:
 # ---------------------------- MAIN UI ---------------------------------
 st.title("📝 Computer-Based Exam with Automatic Scoring")
 
-# If no exam files yet, show waiting message
+# Check if exam files are ready
 if not pdf_bytes or not questions:
     st.warning("⏳ Waiting for teacher to upload the exam. Please wait...")
-    st.stop()  # Stop execution here
+    if json_error:
+        st.error(f"JSON error: {json_error}")
+    st.stop()
 
 # Display exam in two columns
 col1, col2 = st.columns([1.3, 1])
@@ -168,9 +209,14 @@ with col2:
             st.write(f"Sagutin ang {len(questions)} na tanong.")
             for idx, q in enumerate(questions, start=1):
                 q_key = f"Q{idx}"
-                st.markdown(f"**{idx}. {q['question']}**")
+                # Safety: ensure q is dict and has 'question'
+                if not isinstance(q, dict):
+                    st.error(f"Invalid question format at index {idx}")
+                    continue
+                question_text = q.get("question", f"[MISSING QUESTION {idx}]")
+                st.markdown(f"**{idx}. {question_text}**")
                 
-                if "options" in q:  # Multiple choice
+                if "options" in q and isinstance(q["options"], list):  # Multiple choice
                     options = q["options"]
                     default_index = 0
                     if q_key in st.session_state.answers and st.session_state.answers[q_key] in options:
